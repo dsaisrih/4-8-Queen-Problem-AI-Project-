@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>4/8-Queens</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+/* ===== Variables ===== */
+:root{
+  --bg-1: #061020;
+  --bg-2: #021526;
+  --accent: #7c3aed;
+  --accent-2: #06b6d4;
+  --panel-bg: rgba(255,255,255,0.03);
+  --muted: #9fb0c8;
+  --danger: #ef4444;
+  --glass-border: rgba(6,182,212,0.10);
+  --card-radius: 12px;
+}
+
+/* ===== Reset ===== */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:Inter, "Segoe UI", Roboto, Arial, sans-serif;
+  color: #e6eef6;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  display:flex;flex-direction:column;align-items:center;padding:28px;gap:18px;
+  background: radial-gradient(1200px 600px at 10% 10%, rgba(124,58,237,0.08), transparent),
+              radial-gradient(900px 420px at 90% 90%, rgba(6,182,212,0.06), transparent),
+              linear-gradient(180deg,var(--bg-1),var(--bg-2));
+  overflow:hidden;
+  animation: bgShift 9s ease-in-out infinite alternate;
+}
+@keyframes bgShift{ from{background-position:0% 0%} to{background-position:100% 100%} }
+
+/* floating decorative blobs (blurred, behind content) */
+.float-blob{position:fixed;border-radius:50%;filter:blur(48px);opacity:.7;z-index:0;pointer-events:none}
+.float-blob.a{width:420px;height:420px;left:-80px;top:-100px;background:radial-gradient(circle at 30% 30%,var(--accent),transparent)}
+.float-blob.b{width:320px;height:320px;right:-60px;bottom:-120px;background:radial-gradient(circle at 70% 70%,var(--accent-2),transparent);}
+.float-blob{animation: floatMove 12s ease-in-out infinite}
+@keyframes floatMove{0%{transform:translateY(0) rotate(0)}50%{transform:translateY(18px) rotate(8deg)}100%{transform:translateY(0) rotate(0)} }
+
+/* ===== Header ===== */
+.header{width:100%;max-width:1100px;display:flex;justify-content:space-between;align-items:center;gap:12px;z-index:1}
+.brand{display:flex;gap:12px;align-items:center}
+.logo{width:46px;height:46px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(6,182,212,0.06);font-weight:700;color:#021018;font-size:18px}
+.title{font-size:18px;font-weight:700;letter-spacing:0.2px}
+.subtitle{font-size:12px;color:var(--muted);margin-top:2px}
+
+/* ===== Controls ===== */
+.toolbar{width:100%;max-width:1100px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;z-index:1}
+.btn{position:relative;overflow:hidden;background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#021018;border:none;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;box-shadow:0 12px 30px rgba(2,6,23,0.55);user-select:none;transition:transform .18s cubic-bezier(.2,.9,.2,1),box-shadow .18s ease}
+.btn:hover{transform:translateY(-6px);box-shadow:0 18px 36px rgba(2,6,23,0.6)}
+.btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted);box-shadow:none}
+.btn:focus{outline:2px solid rgba(124,58,237,0.24);outline-offset:3px}
+.ripple{position:absolute;border-radius:50%;transform:scale(0);opacity:.6;background:rgba(255,255,255,0.5);pointer-events:none}
+
+/* ===== Layout ===== */
+.main{width:100%;max-width:1100px;display:grid;grid-template-columns:520px 1fr;gap:18px;align-items:start;z-index:1}
+
+/* ===== Card + board ===== */
+.card{border-radius:var(--card-radius);background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border:1px solid var(--glass-border);padding:14px;box-shadow:0 18px 60px rgba(2,6,23,0.6);transform:translateY(0);animation:cardAppear .9s cubic-bezier(.2,.9,.2,1) both}
+@keyframes cardAppear{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.board-wrap{display:flex;justify-content:center;align-items:center;padding:8px}
+.board{width:480px;height:480px;display:grid;border-radius:12px;overflow:hidden;border:3px solid rgba(255,255,255,0.03);background:linear-gradient(180deg,#041826,#031424)}
+
+/* board flash when re-rendering */
+.board-flash{animation:boardFlash .28s cubic-bezier(.2,.9,.2,1)}
+@keyframes boardFlash{0%{transform:translateY(6px);filter:brightness(.92);opacity:.94}50%{transform:translateY(-6px);filter:brightness(1.06);opacity:1}100%{transform:translateY(0);filter:brightness(1);opacity:1}}
+
+/* ===== Cell: keep stable layout ===== */
+.cell{position:relative;display:flex;align-items:center;justify-content:center;font-size:36px;user-select:none;transform:none !important;transition:background-color .12s ease, box-shadow .12s ease;outline-offset:0}
+.cell.light{background:linear-gradient(180deg,#fbfeff,#f1f7fa);color:#021018}
+.cell.dark{background:linear-gradient(180deg,#36424f,#2b3643);color:#f7fbff}
+
+/* queen: pop + fade (no layout shift because it's the child element) */
+.queen{color:#021018;font-size:36px;line-height:1;text-shadow:0 0 3px rgba(255,255,255,0.92),0 0 6px rgba(0,0,0,0.6);opacity:0;animation:queenPop .28s cubic-bezier(.2,.9,.2,1) forwards}
+@keyframes queenPop{from{opacity:0;transform:scale(.84) translateY(8px)}60%{opacity:1;transform:scale(1.03) translateY(-6px)}100%{transform:scale(1) translateY(0)}}
+
+/* hints, conflict, last move (no layout shift) */
+.attack::after{content:"";position:absolute;width:12px;height:12px;border-radius:50%;background:rgba(16,185,129,0.85);box-shadow:0 6px 18px rgba(16,185,129,0.12);pointer-events:none;animation:hintPulse 1200ms ease-in-out infinite}
+@keyframes hintPulse{0%{transform:scale(.9);opacity:.9}50%{transform:scale(1.2);opacity:.6}100%{transform:scale(.9);opacity:.9}}
+.conflict{outline:3px solid var(--danger);box-shadow:0 6px 16px rgba(239,68,68,0.08);animation:conflictPulse 1600ms ease-in-out infinite}
+@keyframes conflictPulse{0%{box-shadow:0 6px 16px rgba(239,68,68,0.08);outline-color:rgba(239,68,68,0.9)}50%{box-shadow:0 18px 36px rgba(239,68,68,0.12);outline-color:rgba(239,68,68,0.45)}100%{box-shadow:0 6px 16px rgba(239,68,68,0.08);outline-color:rgba(239,68,68,0.9)}}
+.last-move{box-shadow:inset 0 0 28px rgba(96,165,250,0.07),0 6px 28px rgba(96,165,250,0.06)}
+.coord{position:absolute;left:8px;top:6px;font-size:10px;color:var(--muted)}
+
+/* side panels */
+.side{display:flex;flex-direction:column;gap:12px}
+.panel{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:10px;padding:12px;border:1px solid var(--glass-border);color:var(--muted)}
+.status-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.badge{padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.02);font-weight:600;color:var(--muted)}
+.small{font-size:13px;color:var(--muted)}.steps{height:320px;overflow:auto;font-size:13px;color:#e6eef6}
+
+/* log entry animation */
+.log-line{padding:6px 0;opacity:0;animation:logIn .34s ease forwards}
+@keyframes logIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+
+/* responsive */
+@media (max-width:980px){.main{grid-template-columns:1fr}.board{width:360px;height:360px}}
+</style>
+</head>
+<body>
+  <div class="float-blob a" aria-hidden="true"></div>
+  <div class="float-blob b" aria-hidden="true"></div>
+
+<div class="header" style="max-width:1100px">
+  <div class="brand">
+    <div class="logo">NQ</div>
+    <div>
+      <div class="title"> 4 / 8 Queens Simulator </div>
+      <div class="subtitle">Manual • Backtracking • ML (Min-Conflicts)</div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;align-items:center">
+    <div class="small" style="color:var(--muted)"></div>
+  </div>
+</div>
+
+<div class="toolbar">
+  <button class="btn" onclick="setN(4)">4</button>
+  <button class="btn" onclick="setN(8)">8</button>
+  <button class="btn" onclick="resetBoard()">Reset</button>
+  <button class="btn" onclick="solveBT()">Backtracking</button>
+  <button class="btn" onclick="solveML()">ML Min-Conflicts</button>
+  <button class="btn" onclick="toggleAttackHints()">Toggle Hints</button>
+</div>
+
+<div class="main">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 4px 12px">
+      <div style="font-weight:700">Chessboard</div>
+      <div style="font-size:13px;color:var(--muted)">Click cells to place/remove</div>
+    </div>
+
+    <div class="board-wrap">
+      <div id="board" class="board" role="grid" aria-label="N-Queens board"></div>
+    </div>
+  </div>
+
+  <div class="side">
+    <div class="panel status-row">
+      <div style="flex:1">
+        <div id="state" class="small"></div>
+        <div id="status" class="small" style="margin-top:6px"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+        <div id="time" class="badge">Time: 0.000 s</div>
+        <div id="hintBadge" class="badge">Hints: ON</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div style="font-weight:700;margin-bottom:8px">Steps / Log</div>
+      <div id="steps" class="steps"><b>Steps:</b><br></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* -----------------------
+   Data + DOM references
+   ----------------------- */
+let N = 8;
+let board = [];
+let solved = false;
+let showHints = true;
+let startTime = 0;
+let lastMove = null; // {r,c}
+
+const boardEl = document.getElementById('board');
+const stepsEl = document.getElementById('steps');
+const hintBadge = document.getElementById('hintBadge');
+
+/* -----------------------
+   Helpers
+   ----------------------- */
+function pos(r,c){ return String.fromCharCode(65+c) + (N - r); }
+function nowSeconds(){ return performance.now()/1000; }
+function sleep(ms){ return new Promise(res => setTimeout(res, ms)); }
+function updateBadge(){ hintBadge.textContent = `Hints: ${showHints ? 'ON' : 'OFF'}`; }
+
+/* -----------------------
+   Init / reset / setN
+   ----------------------- */
+function setN(n){
+  N = n;
+  boardEl.style.gridTemplateColumns = `repeat(${N},1fr)`;
+  resetBoard();
+}
+function resetBoard(){
+  board = Array.from({length:N}, ()=> Array(N).fill(0) );
+  solved = false;
+  startTime = 0;
+  lastMove = null;
+  stepsEl.innerHTML = '<b>Steps:</b><br>';
+  updateStatus('Manual mode');
+  updateTime(0);
+  render();
+}
+
+/* -----------------------
+   Render board
+   ----------------------- */
+function render(){
+  // brief board flash to emphasize update
+  boardEl.classList.add('board-flash');
+  clearTimeout(boardEl._flashTimeout);
+  boardEl._flashTimeout = setTimeout(() => boardEl.classList.remove('board-flash'), 340);
+
+  boardEl.innerHTML = '';
+  boardEl.style.gridTemplateColumns = `repeat(${N},1fr)`;
+  for(let r=0;r<N;r++){
+    for(let c=0;c<N;c++){
+      const cell = document.createElement('div');
+      cell.className = 'cell ' + ((r+c)%2 ? 'dark' : 'light');
+
+      const coord = document.createElement('div');
+      coord.className = 'coord';
+      coord.textContent = pos(r,c);
+      cell.appendChild(coord);
+
+      if(board[r][c]){
+        const q = document.createElement('div');
+        q.className = 'queen';
+        q.textContent = '♛';
+        cell.appendChild(q);
+        if(conflicts(r,c)) cell.classList.add('conflict');
+      } else {
+        if(showHints && !solved && attacked(r,c)){
+          cell.classList.add('attack');
+        }
+      }
+
+      if(lastMove && lastMove.r === r && lastMove.c === c){
+        cell.classList.add('last-move');
+      }
+
+      cell.onclick = () => handleCellClick(r,c);
+      boardEl.appendChild(cell);
+    }
+  }
+  updateState();
+  updateBadge();
+}
+
+/* -----------------------
+   Manual click behavior
+   ----------------------- */
+function handleCellClick(r,c){
+  if(board[r][c]){
+    board[r][c] = 0;
+    log(`Removed ${pos(r,c)}`);
+    solved = false;
+    updateStatus('Manual editing');
+    lastMove = {r: null, c: null};
+  } else {
+    for(let rr=0; rr<N; rr++) board[rr][c] = 0;
+    board[r][c] = 1;
+    log(`Placed ${pos(r,c)}`);
+    lastMove = {r,c};
+  }
+
+  if(isGoalState()){
+    solved = true;
+    updateStatus('🎯 Goal State Reached (manual)');
+    if(startTime) updateTime(nowSeconds() - startTime);
+  } else {
+    solved = false;
+  }
+
+  render();
+}
+
+/* -----------------------
+   Attack / conflicts
+   ----------------------- */
+function attacked(r,c){
+  for(let i=0;i<N;i++){
+    if(board[r][i] || board[i][c]) return true;
+    if(board[r+i]?.[c+i]) return true;
+    if(board[r-i]?.[c-i]) return true;
+    if(board[r+i]?.[c-i]) return true;
+    if(board[r-i]?.[c+i]) return true;
+  }
+  return false;
+}
+function conflicts(r,c){
+  let cnt=0;
+  for(let i=0;i<N;i++) if(i!==c && board[r][i]) cnt++;
+  for(let d=1; d<N; d++){
+    if(board[r+d]?.[c+d]) cnt++;
+    if(board[r-d]?.[c-d]) cnt++;
+    if(board[r+d]?.[c-d]) cnt++;
+    if(board[r-d]?.[c+d]) cnt++;
+  }
+  return cnt;
+}
+function isGoalState(){
+  let qCount = 0;
+  for(let r=0;r<N;r++){
+    for(let c=0;c<N;c++){
+      if(board[r][c]){
+        qCount++;
+        if(conflicts(r,c) > 0) return false;
+      }
+    }
+  }
+  return qCount === N;
+}
+
+/* -----------------------
+   UI helpers
+   ----------------------- */
+function updateState(){
+  const arr=[];
+  for(let c=0;c<N;c++){
+    const r = board.findIndex(row => row[c] === 1);
+    arr.push(r >= 0 ? r+1 : '_');
+  }
+  document.getElementById('state').innerHTML = `<b>X = [ ${arr.join(', ')} ]</b>`;
+}
+function updateStatus(t){ document.getElementById('status').innerHTML = `<b>Status:</b> ${t}`; }
+function updateTime(t){ document.getElementById('time').textContent = `Time: ${Number(t).toFixed(3)} s`; }
+function log(msg){
+  const node = document.createElement('div');
+  node.className = 'log-line';
+  node.textContent = msg;
+  stepsEl.appendChild(node);
+  stepsEl.scrollTop = stepsEl.scrollHeight;
+}
+function toggleAttackHints(){ showHints = !showHints; render(); }
+
+/* -----------------------
+   Backtracking solver
+   ----------------------- */
+async function solveBT(){
+  resetBoard();
+  startTime = nowSeconds();
+  updateStatus('Backtracking running');
+  await bt(0);
+  solved = true;
+  updateStatus('Solved (Backtracking)');
+  updateTime(nowSeconds() - startTime);
+  render();
+}
+async function bt(col){
+  if(col >= N) return true;
+  for(let r=0;r<N;r++){
+    board[r][col] = 1;
+    log(`Try ${pos(r,col)}`);
+    lastMove = {r, c: col};
+    render();
+    await sleep(150);
+    if(conflicts(r,col) === 0){
+      if(await bt(col+1)) return true;
+    }
+    board[r][col] = 0;
+    log(`Backtrack ${pos(r,col)}`);
+  }
+  return false;
+}
+
+/* -----------------------
+   ML: Min-Conflicts
+   ----------------------- */
+async function solveML(){
+  resetBoard();
+  startTime = nowSeconds();
+  updateStatus('ML Min-Conflicts running');
+
+  // initial: one queen per column
+  for(let c=0;c<N;c++){
+    const r = Math.floor(Math.random()*N);
+    board[r][c] = 1;
+  }
+
+  const maxSteps = Math.max(2000, 20 * N);
+  for(let step=0; step < maxSteps; step++){
+    render();
+    await sleep(60);
+
+    // gather conflicted columns
+    const conflicted = [];
+    for(let c=0;c<N;c++){
+      const r = board.findIndex(row => row[c] === 1);
+      if(r < 0) continue;
+      if(conflicts(r,c) > 0) conflicted.push(c);
+    }
+
+    if(conflicted.length === 0){
+      solved = true;
+      updateStatus('Solved (ML Min-Conflicts)');
+      updateTime(nowSeconds() - startTime);
+      render();
+      return;
+    }
+
+    const col = conflicted[Math.floor(Math.random() * conflicted.length)];
+    const oldRow = board.findIndex(row => row[col] === 1);
+    if(oldRow >= 0) board[oldRow][col] = 0;
+
+    let bestRows = [], bestScore = Infinity;
+    for(let r=0;r<N;r++){
+      board[r][col] = 1;
+      const score = conflicts(r,col);
+      if(score < bestScore){ bestScore = score; bestRows = [r]; }
+      else if(score === bestScore){ bestRows.push(r); }
+      board[r][col] = 0;
+    }
+
+    const chosen = bestRows[Math.floor(Math.random() * bestRows.length)];
+    board[chosen][col] = 1;
+    lastMove = {r: chosen, c: col};
+    log(`ML step ${step+1}: moved ${String.fromCharCode(65+col)} to row ${N-chosen}`);
+  }
+
+  updateStatus('ML stopped (max steps reached)');
+  updateTime(nowSeconds() - startTime);
+  render();
+}
+
+/* -----------------------
+   Start
+   ----------------------- */
+setN(8);
+updateBadge();
+</script>
+
+<script>
+// Button ripple effect
+document.querySelectorAll('.btn').forEach(btn => {
+  btn.addEventListener('click', function (e) {
+    const rect = btn.getBoundingClientRect();
+    const ripple = document.createElement('span');
+    ripple.className = 'ripple';
+    const size = Math.max(rect.width, rect.height) * 1.2;
+    ripple.style.width = ripple.style.height = size + 'px';
+    ripple.style.left = (e.clientX - rect.left - size/2) + 'px';
+    ripple.style.top = (e.clientY - rect.top - size/2) + 'px';
+    btn.appendChild(ripple);
+    ripple.animate([
+      { transform: 'scale(0)', opacity: 0.6 },
+      { transform: 'scale(1)', opacity: 0 }
+    ], { duration: 600, easing: 'cubic-bezier(.2,.9,.2,1)' });
+    setTimeout(() => ripple.remove(), 700);
+  });
+});
+
+// Give small staggered entrance to cards
+document.querySelectorAll('.card').forEach((c, i) => { c.style.animationDelay = (i * 80) + 'ms'; });
+
+// Gentle blob motion using Web Animations API
+document.querySelectorAll('.float-blob').forEach((b, i) => {
+  b.animate([
+    { opacity: 0.7, transform: 'scale(1)' },
+    { opacity: 0.55, transform: 'scale(1.06)' },
+    { opacity: 0.7, transform: 'scale(1)' }
+  ], { duration: 9000 + i * 1200, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out' });
+});
+</script>
+
+</body>
+</html>
